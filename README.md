@@ -37,15 +37,15 @@
 
 
 ## 📌 결과 
-| Task |  Accuracy (IOU threshold = 0.5) |
+| Task |  Accuracy |
 |--------|---------|
 | **Speech Balloon Detection** | 92.22% |
 | **Speech Balloon Classification** | 96.39% |
 | **Character Detection and Identification** | 72.31% |
 | **Balloon-to-Character Association** |  84.75% |
 
-- Speech Balloon Classification : boudning box의 크기를 20% 확장했을 때 기존 성능 대비 **44.58% 개선**
--  Balloon-to-Character Association :  baseline magiv2 모델 성능 대비 **20.34% 개선**
+- `Speech Balloon Classification` : boudning box의 크기를 20% 확장했을 때 기존 성능 대비 **44.58% 개선**
+-  `Balloon-to-Character Association` :  baseline magiv2 모델 성능 대비 **20.34% 개선**
 선
 
 ## 🔧 Trouble Shooting 
