@@ -8,7 +8,7 @@
 - 목표 : 웹툰의 **시각적 정보**와 대사의 **감정적 정보**를 결합해 더욱 풍부하고 실감 나는 청각 경험을 제공
 ---
 
-## 🏗️ 전체 파이프라인
+## 🏗️ Pipeline
 ![Image](https://github.com/user-attachments/assets/bef66021-3bd7-4fc0-9906-1346f939948c)
 <br></br>
 
@@ -22,24 +22,53 @@
 | **화자 할당 문제** | Tail tip(말풍선 꼬리 방향) 및 문맥을 고려한 화자 매칭 필요 |
 | **감정 반영 음성 합성** | 캐릭터의 성별, 나이, 감정에 따라 적절한 음성 톤을 생성해야 함 |
 
-### 1️⃣ 말풍선 형태 분석   <br>
-✔️ **말풍선 탐지**  
-   - YOLOv8 Segmentation (Fine-tuned for speech bubbles)
-   - MSER 기반 나레이션 감지 (Tail Tip이 없는 직사각형 박스 검출)  
-✔️ **말풍선 분류**
-   - ㄹㄹ
-   - 
-### 2️⃣대화 순서 결정
-  - 위에서 아래,왼쪽에서 오른쪽 정렬 
-### 3️⃣화자 할당
-### 4️⃣ 캐릭터 식별
-🛠️
+### ✅ 형태 분석   <br>
+**💬일반 말풍선과 🗯️외침 말풍선**
+
+- 가장 깊은 defect 영역의 segment를 밑변으로 한 삼각형 생성 후, 두 삼각형 사이 최단 거리의 중앙값을 tail tip으로 결정
+- defect 포인트 한 쌍과 하나의 tip 포인트 ➡️ 일반 말풍선
+- 여러 개의 defect와 tip 포인트 ➡️ 외침 말풍선
+  
+**💭생각 말풍선** 
+
+- 원형 구조의 tail tip
+- 뾰족한 tail tip이 없는 말풍선을 대상으로 원형 컨투어 탐지
+
+**🗣️나레이션**
+
+- 명확한 경계와 직사각형 또는 정사각형 형태
+- MSER 알고리즘으로 후보 영역 탐지 후,  4가지 요소(크기, 형태, 위치, 강도)를 기준으로 필터링
+
+![image](https://github.com/user-attachments/assets/4e9fafcb-a09f-4640-9a4d-7e55d68d0470) 
 <br></br>
-### ✅ Speech Synthesis Solution
-1️⃣ **감정 분석**
-2️⃣ **음성 합성**
 
+### ✅ 대화 순서 결정
+  - 위에서 아래,왼쪽에서 오른쪽 정렬
+<br></br>
+### ✅ 화자 할당
+🛠️ Magiv2 model, OpenAI ChatCompletion API
 
+Magiv2 모델을 활용하여 이미지 내 등장인물을 식별한 뒤 말풍선에 적절한 화자를 할당
+- Input : 캐릭터 얼굴 crop 이미지, 캐릭터 이름 
+- Output : 캐릭터 이름, Bounding box 좌표  
+
+식별된 등장인물의 bounding box 좌표를 이용하여 말풍선 할당
+- **일반 말풍선과 생각 말풍선** : 가장 가까운 화자를 먼저 할당한 뒤, tail tip의 방향 벡터와 화자 간의 각도를 기준으로 적합성 판단
+- **외침 말풍선** : bounding box 중점에서 거리가 가장 가까운 캐릭터를 화자로 설정
+- **나레이션** : OpenAI ChatCompletion API를 활용해 가장 빈번히 등장하는 화자나 서술자를 기준으로 화자 할당
+
+### ✅ 감정 분석
+🛠️ OpenAI ChatCompletion API
+- 프롬프트 설계를 통해 생성된 전체 요약과 대사 문맥 고려
+- 각 대사에 대해 7개의 감정 라벨 `'Happy', 'Sad', 'Angry', 'Anxious', 'Hurt', 'Embarrassed', 'Neutrality'` 할당
+
+### ✅ 음성 합성
+Datasets
+🛠️ Face-TTS model 
+
+두 개의 데이터를 결합해 생성한 얼굴 이미지, 캐릭터 특성, 음성을 모두 포함한 데이터로 모델을 학습시켜 얼굴 이미지에 따라 음성을 생성하도록 유도하였다.
+
+![19th 컨퍼런스 포스터](투빅스_19th_컨퍼런스_포스터.png)
 ---
 ## 📌 결과 
 | Task |  Accuracy |
@@ -50,9 +79,10 @@
 | **Balloon-to-Character Association** |  84.75% |
 
 - `Speech Balloon Classification` : boudning box의 크기를 20% 확장했을 때 기존 성능 대비 **44.58% 개선**
--  `Balloon-to-Character Association` :  baseline magiv2 모델 성능 대비 **20.34% 개선**
+- `Balloon-to-Character Association` :  baseline magiv2 모델 성능 대비 **20.34% 개선**
 
-🔗음성 합성 결과 보러가기 [링크를 클릭해주세요!][]
+📸 TTS 결과는 위 QR을 통해서 확인하실 수 있습니다 
+
 ---
 <br></br>
 ## 🔧 Trouble Shooting 
