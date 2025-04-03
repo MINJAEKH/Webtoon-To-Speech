@@ -71,9 +71,9 @@ Magiv2 모델을 활용하여 이미지 내 등장인물을 식별한 뒤 말풍
 🛠️ Face-TTS model 
 - 두 개의 데이터를 결합해 생성한 얼굴 이미지, 캐릭터 특성, 음성을 모두 포함한 데이터로 모델을 학습시켜 얼굴 이미지에 따라 음성을 생성하도록 유도하였다.
 
-![19th 컨퍼런스 포스터](투빅스_19th_컨퍼런스_포스터.png)
 ---
 ## 📌 결과 
+
 | Task |  Accuracy |
 |--------|---------|
 | **Speech Balloon Detection** | 92.22% |
@@ -84,7 +84,9 @@ Magiv2 모델을 활용하여 이미지 내 등장인물을 식별한 뒤 말풍
 - `Speech Balloon Classification` : boudning box의 크기를 20% 확장했을 때 기존 성능 대비 **44.58% 개선**
 - `Balloon-to-Character Association` :  baseline magiv2 모델 성능 대비 **20.34% 개선**
 
-📸 TTS 결과는 위 QR을 통해서 확인하실 수 있습니다 
+📸 TTS 결과는 아래 QR을 통해서 확인하실 수 있습니다 (네이버 API 사용) 
+
+![19th 컨퍼런스 포스터](투빅스_19th_컨퍼런스_포스터.png)
 
 ---
 <br></br>
