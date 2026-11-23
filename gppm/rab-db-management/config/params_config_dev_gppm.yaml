@@ -16,6 +16,11 @@ confluence_token: 'secret'
 
 # 예비토큰
 
+#=========================Subsidiary===================================
+subsidiary_path: './pipeline_storage/subsidiary_gppm'
+subsidiary_root_id: '11111111'
+config_path: './pipeline_storage/config_gppm'
+
 bootstrap_roots:
   SEA: "숫자"
   MANAGEMENT: "숫자" # 경영관리기준
@@ -85,6 +90,7 @@ minio_secret_key: 'secret'
 
 #======= DEV TEST =======
 # 각 단계를 수행할지 결정
+run_subsidiary_registry: True
 run_tree_discovery: True
 load_changed_urls: False
 run_downloader: True

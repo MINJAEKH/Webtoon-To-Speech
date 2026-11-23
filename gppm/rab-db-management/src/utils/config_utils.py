@@ -1,11 +1,19 @@
 import os
-
 import re
 import shutil
 import logging
+import tempfile
 from datetime import datetime
 from typing import Dict
 
+import yaml
+
+logger = logging.getLogger(__name__)
+
+
+# =========================================================
+# 줄 단위 helper (파일 IO 없음)
+# =========================================================
 def _find_block(lines: list[str], block_key: str) -> tuple[int, int, str]:
     """
     yaml 줄 목록에서 최상위 block_key 블록의 시작 줄, 마지막 내용 줄, 항목 들여쓰기를 찾는다.
@@ -17,12 +25,11 @@ def _find_block(lines: list[str], block_key: str) -> tuple[int, int, str]:
             indent: 기존 항목의 들여쓰기 (항목이 없으면 "  ")
     """
     pattern = re.compile(rf"^{re.escape(block_key)}:\s*(#.*)?$")
-    start = next((i for i, l in enumerate(lines) if pattern.match(l.rstrip("\n"))), None)
+    start = next((i for i, line in enumerate(lines) if pattern.match(line.rstrip("\r\n"))), None)
     if start is None:
         raise ValueError(f"'{block_key}:' block not found")
 
-    last = start
-    indent = "  "
+    last, indent = start, "  "
     for i in range(start + 1, len(lines)):
         line = lines[i]
         if not line.strip():                      # 빈 줄은 판단에서 제외
@@ -34,57 +41,31 @@ def _find_block(lines: list[str], block_key: str) -> tuple[int, int, str]:
             indent = line[: len(line) - len(line.lstrip())]
     return start, last, indent
 
-def upsert_bootstrap_roots(
-    yaml_path: str,
-    roots: Dict[str, str],
-    backup_dir: str = "./pipeline_storage/config_gppm",
-    block_key: str = "bootstrap_roots",
-) -> bool:
+
+def _apply_roots(lines: list[str], roots: Dict[str, str], block_key: str, eol: str) -> tuple[list[str], bool]:
     """
-    yaml의 bootstrap_roots 블록에 {법인명: page_id}를 덮어쓰기/추가한다.
-    yaml 파일의 나머지 줄(구조, 띄어쓰기, 주석)은 그대로 유지한다.
-
-    동작:
-        1. yaml을 줄 단위로 읽고 bootstrap_roots 블록 범위를 찾는다.
-        2. 블록 안에 같은 key가 있으면 page_id 값만 바꾼다 (들여쓰기, 줄 끝 주석 유지).
-        3. 없는 key는 블록 마지막 항목 아래에 기존 들여쓰기로 추가한다.
-        4. 바뀐 게 없으면 백업/저장 없이 끝낸다.
-        5. 원본 yaml을 backup_dir/v_old/v_old_{파일명}_{YYYYMMDD_HHMMSS}.yaml 로 복사한다.
-        6. 임시 파일에 쓴 뒤 os.replace로 원본 yaml을 바꿔친다. (v_new 파일은 만들지 않음)
-
-    Args:
-        yaml_path: 수정할 config yaml 경로 (예: config/params_config_dev_gppm.yaml).
-        roots: 붙일 {법인명: page_id}.
-        backup_dir: 백업 폴더. 그 아래 v_old/ 에 저장한다.
-        block_key: 대상 블록 이름.
+    lines 복사본에 roots를 덮어쓰기/추가한다.
 
     Returns:
-        bool: yaml이 바뀌었으면 True, 바뀐 게 없으면 False.
+        (new_lines, changed)
     """
-    with open(yaml_path, encoding="utf-8") as f:
-        lines = f.readlines()
-
-    try:
-        start, last, indent = _find_block(lines, block_key)
-    except ValueError as e:
-        logger.error("[CONFIG ROOTS][failed] %s | file=%s", e, yaml_path)
-        raise
-
+    lines = list(lines)
+    start, last, indent = _find_block(lines, block_key)
     changed = False
+
     for name, page_id in roots.items():
-        page_id = str(page_id)
+        name, page_id = str(name).strip(), str(page_id).strip()
         # 들여쓰기 + key + ":" + 값(따옴표 유무 상관없음) + 나머지(공백/주석)
         key_re = re.compile(
             rf"^(?P<indent>[ \t]+){re.escape(name)}(?P<sep>\s*:\s*)"
             rf"(?P<value>\"[^\"]*\"|'[^']*'|[^\s#]*)(?P<rest>.*)$"
         )
 
-        hit = None
-        for i in range(start + 1, last + 1):
-            m = key_re.match(lines[i].rstrip("\n"))
-            if m:
-                hit = (i, m)
-                break
+        hit = next(
+            ((i, m) for i in range(start + 1, last + 1)
+             if (m := key_re.match(lines[i].rstrip("\r\n")))),
+            None,
+        )
 
         if hit:
             i, m = hit
@@ -92,41 +73,122 @@ def upsert_bootstrap_roots(
             if old_value == page_id:
                 logger.info("[CONFIG ROOTS] unchanged | %s=%s", name, page_id)
                 continue
-            newline = "\n" if lines[i].endswith("\n") else ""
-            lines[i] = f'{m.group("indent")}{name}{m.group("sep")}"{page_id}"{m.group("rest")}{newline}'
+            line_eol = lines[i][len(lines[i].rstrip("\r\n")):]
+            lines[i] = f'{m.group("indent")}{name}{m.group("sep")}"{page_id}"{m.group("rest")}{line_eol}'
             logger.info("[CONFIG ROOTS] overwrite | %s: %s -> %s", name, old_value, page_id)
         else:
-            if not lines[last].endswith("\n"):     # 파일 끝에 줄바꿈이 없는 경우 대비
-                lines[last] += "\n"
+            if not lines[last].endswith(("\n", "\r")):    # 파일 끝에 줄바꿈이 없는 경우 대비
+                lines[last] += eol
             last += 1
-            lines.insert(last, f'{indent}{name}: "{page_id}"\n')
+            lines.insert(last, f'{indent}{name}: "{page_id}"{eol}')
             logger.info("[CONFIG ROOTS] append | %s=%s", name, page_id)
         changed = True
 
-    if not changed:
-        logger.info("[CONFIG ROOTS] nothing to change | file=%s", yaml_path)
-        return False
+    return lines, changed
 
-    # 원본 백업: backup_dir/v_old/v_old_{파일명}_{timestamp}{확장자}
+
+def _verify_roots(text: str, roots: Dict[str, str], block_key: str) -> None:
+    """바뀐 yaml 텍스트를 실제로 파싱해서 roots가 그대로 들어갔는지 확인한다."""
+    try:
+        parsed = yaml.safe_load(text) or {}
+    except yaml.YAMLError as e:
+        raise ValueError(f"yaml parse failed after update: {e}") from e
+
+    block = parsed.get(block_key) or {}
+    wrong = {
+        str(k): block.get(str(k))
+        for k, v in roots.items()
+        if str(block.get(str(k))) != str(v).strip()
+    }
+    if wrong:
+        raise ValueError(f"yaml verify failed | {block_key} mismatch: {wrong}")
+
+
+# =========================================================
+# 파일 helper
+# =========================================================
+def _backup_file(path: str, backup_dir: str) -> str:
+    """원본을 backup_dir/v_old/v_old_{파일명}_{YYYYMMDD_HHMMSS}{확장자} 로 복사한다."""
     v_old_dir = os.path.join(backup_dir, "v_old")
     os.makedirs(v_old_dir, exist_ok=True)
-    stem, ext = os.path.splitext(os.path.basename(yaml_path))
+    stem, ext = os.path.splitext(os.path.basename(path))
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     backup_path = os.path.join(v_old_dir, f"v_old_{stem}_{timestamp}{ext}")
-    shutil.copy2(yaml_path, backup_path)
-    logger.info("[CONFIG ROOTS] backup | %s", backup_path)
+    shutil.copy2(path, backup_path)
+    return backup_path
 
-    # 임시 파일에 쓰고 원본과 바꿔치기
-    tmp_path = f"{yaml_path}.tmp"
+
+def _atomic_write(path: str, text: str) -> None:
+    """같은 폴더의 임시 파일에 쓴 뒤 os.replace로 바꿔친다. (줄바꿈 문자는 text 그대로)"""
+    fd, tmp_path = tempfile.mkstemp(
+        dir=os.path.dirname(os.path.abspath(path)),
+        prefix=os.path.basename(path) + ".",
+        suffix=".tmp",
+    )
     try:
-        with open(tmp_path, "w", encoding="utf-8") as f:
-            f.writelines(lines)
-        os.replace(tmp_path, yaml_path)
-    except Exception as e:
-        logger.error("[CONFIG ROOTS][FAIL] write error | file=%s | error=%s", yaml_path, e)
+        with os.fdopen(fd, "w", encoding="utf-8", newline="") as f:
+            f.write(text)
+        os.replace(tmp_path, path)
+    except Exception:
         if os.path.exists(tmp_path):
             os.remove(tmp_path)
         raise
 
+
+# =========================================================
+# public
+# =========================================================
+def update_bootstrap_roots(
+    yaml_path: str,
+    roots: Dict[str, str],
+    backup_dir: str = "./pipeline_storage/config_gppm",
+    block_key: str = "bootstrap_roots",
+) -> None:
+    """
+    yaml의 bootstrap_roots 블록에 {법인명: page_id}를 덮어쓰기/추가한다.
+    yaml 파일의 나머지 줄(구조, 띄어쓰기, 주석, 줄바꿈 CRLF/LF)은 그대로 유지한다.
+
+    동작:
+        1. yaml을 줄 단위로 읽는다. (줄바꿈 문자 보존)
+        2. bootstrap_roots 블록에서 같은 key는 값만 바꾸고, 없는 key는 블록 끝에 추가한다.
+        3. 바뀐 게 없으면 백업/저장 없이 끝낸다.
+        4. 바뀐 텍스트를 yaml로 파싱해 roots가 제대로 들어갔는지 검증한다.
+        5. 원본을 backup_dir/v_old/ 에 백업하고, 임시 파일 → os.replace로 원본을 바꿔친다.
+
+    Args:
+        yaml_path: 수정할 config yaml 경로 (예: config/params_config_dev_gppm.yaml).
+        roots: 붙일 {법인명: page_id}.
+        backup_dir: 백업 폴더. 그 아래 v_old/ 에 저장한다.
+        block_key: 대상 블록 이름.
+
+    """
+    if not roots:
+        logger.info("[CONFIG ROOTS] empty roots, skip")
+        return
+
+    try:
+        with open(yaml_path, encoding="utf-8", newline="") as f:
+            lines = f.readlines()
+        eol = "\r\n" if lines and lines[0].endswith("\r\n") else "\n"
+
+        new_lines, changed = _apply_roots(lines, roots, block_key, eol)
+        if not changed:
+            logger.info("[CONFIG ROOTS] nothing to change | file=%s", yaml_path)
+            return
+
+        new_text = "".join(new_lines)
+        _verify_roots(new_text, roots, block_key)
+
+        backup_path = _backup_file(yaml_path, backup_dir)
+        logger.info("[CONFIG ROOTS] backup | %s", backup_path)
+
+        _atomic_write(yaml_path, new_text)
+
+    except RuntimeError as e:
+        logger.error("[CONFIG ROOTS][FAIL] %s | file=%s", e, yaml_path)
+        raise
+    except Exception as e:  # OSError, UnicodeDecodeError 등도 ValueError로 통일
+        logger.error("[CONFIG ROOTS][FAIL] %s: %s | file=%s", type(e).__name__, e, yaml_path)
+        raise RuntimeError(f"update_bootstrap_roots failed | file={yaml_path} | {type(e).__name__}: {e}") from e
+
     logger.info("[CONFIG ROOTS][SUCCESS] updated | file=%s", yaml_path)
-    return True

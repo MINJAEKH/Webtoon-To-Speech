@@ -31,14 +31,16 @@ from src.pipeline.change_urls import (
     log_changed_urls,
     save_changed_urls_versioned,
 )
+from src.pipeline.subsidiary_registry import SubsidiaryRegistry
 from src.pipeline.confluence_downloader import ConfluenceDocumentExtractor
 from src.pipeline.update_confluence_dump_and_captioning import ConfluenceDocumentProcessor
 from src.pipeline.chunking_and_embedding import DocumentEmbedder
 from src.pipeline.milvus_minio_sync import MilvusMinioSync
 
+from src.utils.config_utils import update_bootstrap_roots
 from src.test import test_connection_all
 from src.utils.log_config import setup_logging, log_file_managing
-from src.utils.config import print_update_steps, init_config, parse_args, validate_directories
+from src.utils.config import print_update_steps, init_config, parse_args, validate_directories, get_config_path
 from src.utils.confluence_patch import patch_confluence_request
 
 from src.utils.utils import (
@@ -123,10 +125,10 @@ def pipeline(config: EasyDict, subsidiary_list: list):
                 subsidiary_path=config.subsidiary_path,
             )
             
-            local_boostrap_roots = registry.sync(subsidiary_list)
-            #upsert_bootstrap_roots(config_file_path, local_boostrap_roots)
-            #config.bootstrap_roots = {**config.bootstrap_roots, **local_boostrap_roots}
-            # logger.info(config.bootstrap_roots 바뀐거 알리기)
+            local_bootstrap_roots = registry.sync(subsidiary_list)
+            update_bootstrap_roots(get_config_path(), local_bootstrap_roots)
+            config.bootstrap_roots = {**config.bootstrap_roots, **local_bootstrap_roots}
+            logger.info("[Local] bootstrap_roots updated | added=%s", local_bootstrap_roots)
         else :
             logger.info("[Global] GPPM pipeline will be active")
     # =========================================================
@@ -453,7 +455,7 @@ def run(config, subsidiary_list):
 if __name__ == "__main__":
     args = parse_args()
     config_file_path = args.config
-    subsidiary_list = args.local_corps
+    subsidiary_list = args.subsidiary_list
     
     config = init_config(config_file_path)
 

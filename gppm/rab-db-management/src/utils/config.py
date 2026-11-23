@@ -90,7 +90,7 @@ def _load_config_from_file(config_file_path: str | Path) -> EasyDict:
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('-c', '--config', type=str, help="path of the config yaml file name")
-    parser.add_argument('--local-corps', nargs='*', default=[], help="list of subsidiary names")
+    parser.add_argument('--subsidiary-list', nargs='*', default=[], help="list of subsidiary names")
     parser.add_argument("--airflow-start-date", type=str, default=None, help="Airflow API에서 전달한 start_date. Format: YYYYMMDD_HHMMSS")
     
     args = parser.parse_args()
@@ -124,3 +124,12 @@ def get_config() -> EasyDict:
             "Call init_config(config_file_path) once in main.py first."
         )
     return _CONFIG
+
+def get_config_path() -> str:
+    """
+    어디서든 불러서 쓰는 함수.
+    init_config가 먼저 호출되지 않았으면 에러를 발생시켜줌.
+    """
+    if _CONFIG_PATH is None:
+        raise RuntimeError("Config is not initialized yet. Call init_config() first.")
+    return _CONFIG_PATH

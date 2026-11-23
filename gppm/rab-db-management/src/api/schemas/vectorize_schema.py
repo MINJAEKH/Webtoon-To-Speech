@@ -15,17 +15,17 @@
 from typing import Annotated, Literal, Optional
 from pydantic import BaseModel, Field, field_validator
 
-CorpName = Annotated[str, Field(pattern = r"^[A-Z0-9_]{2,50}$")]
+CorpName = Annotated[str, Field(pattern = r"^[\w\s\-().&]{2,100}$")]
 
 # 기존 RootPageId 정의는 더 이상 안 쓰면 삭제
 class VectorizeRunRequest(BaseModel):
     '''
-    - local_corps가 비어 있으면([], null, 키 없음) 기존 파이프라인 실행
+    - subsidiary_list가 비어 있으면([], null, 키 없음) 기존 파이프라인 실행
     - 값이 있으면 Local 파이프라인 실행
     '''
-    local_corps: list[CorpName] = Field(default_factory=list)
+    subsidiary_list: list[CorpName] = Field(default_factory=list)
 
-    @field_validator("local_corps", mode="before")
+    @field_validator("subsidiary_list", mode="before")
     @classmethod
     def none_to_empty(cls, v):
         return [] if v is None else v
@@ -37,7 +37,7 @@ class VectorizeRunRequest(BaseModel):
 
 class VectorizeRunResponse(BaseModel):
     start_date: str
-    local_corps: list[str] = []
+    subsidiary_list: list[str] = []
 
 class VectorizeStatusResponse(BaseModel):
     status: Literal["running", "done", "failed"]

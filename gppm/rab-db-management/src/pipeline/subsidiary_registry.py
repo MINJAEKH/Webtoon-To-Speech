@@ -83,7 +83,7 @@ class SubsidiaryRegistry:
         )
         
         local_bootstrap_roots = self._validate_inputs(results, subsidiary_list)
-        print("[SUBSIDIARY REGISTER] local_bootstrap_roots=%s", local_bootstrap_roots)
+        logger.info("[SUBSIDIARY REGISTER] local_bootstrap_roots=%s", local_bootstrap_roots)
         return local_bootstrap_roots
     
     # =========================================================
@@ -117,7 +117,7 @@ class SubsidiaryRegistry:
                 break
 
         if total is not None and len(rows) < total:
-            print("[SUBSIDIARY REGISTER] %s | rows(%s) < totalSize(%s)", cql, len(rows), total) # logger.warning
+            logger.warning("[SUBSIDIARY REGISTER] %s | rows(%s) < totalSize(%s)", cql, len(rows), total) # logger.warning
         return rows
     
     def _fetch_page_ids(self) -> dict[str,str] :
@@ -134,7 +134,7 @@ class SubsidiaryRegistry:
             page_id = content.get("id")
             if title and page_id :
                 fetched_page_ids[title] = str(page_id)
-        print("[SUBSIDIARY REGISTER] fetched=%s", len(fetched_page_ids)) # logger.info
+        logger.info("[SUBSIDIARY REGISTER] fetched=%s", len(fetched_page_ids)) # logger.info
         return fetched_page_ids
     
     # =========================================================
@@ -158,10 +158,10 @@ class SubsidiaryRegistry:
         fetched_page_ids: Dict[str, str]
     ) -> SubsidiaryStore:
         """
-        법인 최신화 결과(new_store)를 기존 old_store(SubsidiaryStore)와 비교/병합한다. 파일은 건드리지 않는다.
+        법인 최신화 결과(fetched_page_ids)를 기존 old_store(SubsidiaryStore)와 비교/병합한다. 파일은 건드리지 않는다.
         
         Args:
-        new_store: 법인 최신화 결과 {법인명: page_id, ..., 법인명: page_id}.
+        fetched_page_ids: 법인 최신화 결과 {법인명: page_id, ..., 법인명: page_id}.
         old_store: 기존 v_new에서 읽은 SubsidiaryStore.
         
         비교 항목 :
@@ -172,8 +172,8 @@ class SubsidiaryRegistry:
         """
         results = SubsidiaryStore()
 
-        for subsidiary_name in sorted(new_store.keys() | old_store.subsidiaries.keys()):  # 합집합
-            new_page_id = new_store.get(subsidiary_name)
+        for subsidiary_name in sorted(fetched_page_ids.keys() | old_store.subsidiaries.keys()):  # 합집합
+            new_page_id = fetched_page_ids.get(subsidiary_name)
             old_state = old_store.get(subsidiary_name)
 
             # 1. old에만 있음 → 삭제된 법인
@@ -182,13 +182,13 @@ class SubsidiaryRegistry:
                     results.add_subsidiary(subsidiary_name, old_state)
                 else:  # 이번에 삭제된 건
                     results.add_subsidiary(subsidiary_name, replace(old_state, status="deleted"))
-                    print("[SUBSIDIARY REGISTER] deleted | name=%s, page_id=%s", subsidiary_name, old_state.page_id)
+                    logger.info("[SUBSIDIARY REGISTER] deleted | name=%s, page_id=%s", subsidiary_name, old_state.page_id)
                 continue
 
             # 2. new에만 있음 → 신규 법인
             if old_state is None:
                 results.add_subsidiary(subsidiary_name, SubsidiaryState(page_id=str(new_page_id)))
-                print("[SUBSIDIARY REGISTER] created | name=%s, page_id=%s", subsidiary_name, new_page_id)
+                logger.info("[SUBSIDIARY REGISTER] created | name=%s, page_id=%s", subsidiary_name, new_page_id)
                 continue
 
             # 3. 양쪽에 있고 page_id가 바뀜
@@ -203,18 +203,17 @@ class SubsidiaryRegistry:
             results.add_subsidiary(subsidiary_name, old_state)
 
         logger.info("[SUBSIDIARY REGISTER] done | results=%d | %s", len(results), results.status_counts())
-        print("[SUBSIDIARY REGISTER] done | results=%d | %s", len(results), results.status_counts())
         return results
     
     
     # =========================================================
     #  validate
     # =========================================================
-    def _validate_inputs(self, new_store, subsidiary_list) :
-        """입력한 로컬 법인이 모두 store에 있으며 deleted가 아닌지 확인한 후 {법인명: page_id}를 반환한다."""
+    def _validate_inputs(self, results, subsidiary_list) :
+        """입력한 로컬 법인이 모두 results(SubsidiaryStore)에 있으며 deleted가 아닌지 확인한 후 {법인명: page_id}를 반환한다."""
         local_bootstrap_roots = {}
         for subsidiary in subsidiary_list :
-            state = new_store.get(subsidiary)
+            state = results.get(subsidiary)
             if state is None or state.status == 'deleted' :
                 raise ValueError(f"unknown or deleted subsidiary: {subsidiary}")
             local_bootstrap_roots[subsidiary] = state.page_id

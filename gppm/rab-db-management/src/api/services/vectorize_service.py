@@ -65,10 +65,10 @@ def run_vectorize_process(environment: str, request: Optional[VectorizeRunReques
             "--airflow-start-date",
             start_date,
     ]
-    local_corps = request.local_corps if request else []
+    subsidiary_list = request.subsidiary_list if request else []
 
-    if local_corps:
-        command += ["--local-corps", *local_corps] 
+    if subsidiary_list:
+        command += ["--subsidiary-list", *subsidiary_list] 
 
         
     subprocess.Popen(
@@ -81,7 +81,7 @@ def run_vectorize_process(environment: str, request: Optional[VectorizeRunReques
 
     return VectorizeRunResponse(
             start_date=start_date,
-            local_corps=local_corps,
+            subsidiary_list=subsidiary_list,
         )
 
 def get_vectorize_status(

@@ -16,7 +16,7 @@
 import os
 import logging
 import sys
-from utils.utils import file_managing
+from src.utils.utils import file_managing
 
 from datetime import datetime
 # 한 번만 설정되도록 보장하기 위한 플래그
