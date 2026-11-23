@@ -1,0 +1,97 @@
+#======= COMMON =======
+type: "DEV_GPPM"
+# output_dir: './data'
+source_baseurl: 'https://confluence.secret?pageId='
+cron_log_dir: './scheduler/logs'
+
+max_retries: 10
+initial_delay: 1
+backoff_factor: 2
+
+#=========================Tree===================================
+page_root: 'secret'
+tree_path: './pipeline_storage/tree_gppm'
+
+confluence_token: 'secret'
+
+# 예비토큰
+
+bootstrap_roots:
+  SEA: "숫자"
+  MANAGEMENT: "숫자" # 경영관리기준
+  ICFR: "숫자" # 재무관리기준
+
+#=======CHANGE_URLS====================================================================
+changed_urls_dir: "./pipeline_storage/changed_urls_gppm"
+changed_urls_file_prefix: "changed_urls"
+delete_limit: 100
+
+#======= CONFLUENCE DOWNLOADER =======
+download_dir: './pipeline_storage/downloader/downloaded_gppm'
+abandoned_dir: './pipeline_storage/downloader/abandoned_gppm'
+parser_url: 'secret/parser/html_confluence'
+parser_api_token: ''
+collection_name: 'secret'
+
+ 
+
+#======= CONFLUENCE DUMP UPDATE AND CAPTIONING =======
+document_processor_dir: './pipeline_storage/document_processor_gppm'
+captioning_url: '~/prod/api-chat'
+gauss_text_model_id: "secret" # GaussO-Chat
+gauss_i2t_model_id: "secret" # GaussO MM
+gcc_token: "secret"
+gcc_client: "secret"
+gcc_user_email: "secret@samsung.com"
+confluence_dump_file_prefix: 'confluence_dump'
+replace_existing_captions: True
+
+#======= CHUNKING AND EMBEDDING =======
+embedder_url: 'secret/embed/text/v1'
+embedder_url_prod: 'secret/embed/text/v1'
+stopword_path: './asset/stopword.txt'
+user_tokenizer_path: './asset/user_dict_v2.txt'
+norm_dict_path: './asset/norm_dict_v2.json'
+normalization_mode: 'NONE' #"none", "minmax", "batch_norm"
+n_local_overlap_words: 1
+n_local_dense_embeddings: 8
+tokenizer_url: 'secret/embed/text/tokenize'
+text_chunk_size: 192
+text_chunk_overlap_size: 50
+embed_and_update_dir: './pipeline_storage/embed_and_update_gppm'
+embedder_type: 'custom'
+tcode_list_path: 'secret'
+use_token_based_splitter: True
+# page_tree 에 아래 문자열이 포함된 문서(한국어 기준서)만 H1 소절 제목을 임베딩·BM25 입력에 포함한다.
+h1_embed_page_tree_keywords:
+  - '경영관리기준'
+  - '재무관리기준'
+#======= UPDATE DB SOURCE =======
+source_batch_num_info_filename: 'db_source_batch_num_info.parquet'
+source_batch_len_info_filename: 'db_source_batch_len_info.parquet'
+db_source_dir: './pipeline_storage/embed_and_update_gppm/batch_folder'
+
+#======= MILVUS MINIO =======
+milvus_batch_size: 512
+milvus_uri: 'secret'
+text_chunk_max_length: 31744
+embedding_dimension: 1024
+is_nerp: False
+minio_uri: 'secret'
+bucket_name: 'secret'
+local_image_dir: './pipeline_storage/milvus_minio_sync/images_gppm'
+minio_access_key: 'secret'
+minio_secret_key: 'secret'
+
+#======= DEV TEST =======
+# 각 단계를 수행할지 결정
+run_tree_discovery: True
+load_changed_urls: False
+run_downloader: True
+run_document_processor: True
+run_embed_and_update: True
+#======= INSERT to DB Storage =======
+run_sync_db: True
+# # DB에 chunk를 밀어넣음
+run_sync_db_all: False
+# DB에 저장된 collection을 지우고 처음부터 밀어넣을지, 아니면 업데이트된 source만 바꿀지 결정
